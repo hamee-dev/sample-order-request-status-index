@@ -181,6 +181,8 @@ $goodsFields = [
     'goods_release_date'
     ];
 $goodsOptions = ['goods_release_date-gt' => date('Y-m-d H:i:s')];
+
+// 発売日待ち商品が1件もない場合は$goodsRequest['data']には空配列が入る
 $goodsRequest = executeSearch($client, '/api_v1_master_goods/search', $goodsFields, $goodsOptions);
 
 // 商品マスタの取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
@@ -188,12 +190,6 @@ if($goodsRequest['result'] === 'error'){
     echo("商品マスタ取得のAPIでエラーが発生しました。しばらく時間を空けてからお試しください。\n");
     echo("code: " . $goodsRequest['code'] . "\n");
     echo("message: " . $goodsRequest['message'] . "\n");
-    exit;
-}
-
-// 発売日待ち商品が1件もない場合にはこれ以降の処理をしない
-if($goodsRequest['count'] === '0'){
-    echo('発売日待ち商品が1件もありません。商品を登録してお試しください。');
     exit;
 }
 

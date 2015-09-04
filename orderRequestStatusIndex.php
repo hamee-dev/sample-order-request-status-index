@@ -132,7 +132,7 @@ $baseOrderRequest = executeSearch($client, '/api_v1_receiveorder_base/search', $
 
 // 受注伝票の取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
 if($baseOrderRequest['result'] === 'error'){
-    echo("受注伝票取得のAPIでエラーが発生しました。しばらく時間を空けてからお試しください。\n");
+    echo("受注伝票取得のAPIでエラーが発生しました。詳細は以下\n");
     echo("code: " . $baseOrderRequest['code'] . "\n");
     echo("message: " . $baseOrderRequest['message'] . "\n");
     exit;
@@ -160,7 +160,7 @@ $detailOrderRequest = executeSearch($client, '/api_v1_receiveorder_row/search', 
 
 // 受注伝票明細の取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
 if($detailOrderRequest['result'] === 'error'){
-    echo("受注伝票明細取得のAPIでエラーが発生しました。しばらく時間を空けてからお試しください。\n");
+    echo("受注伝票明細取得のAPIでエラーが発生しました。詳細は以下\n");
     echo("code: " . $detailOrderRequest['code'] . "\n");
     echo("message: " . $detailOrderRequest['message'] . "\n");
     exit;
@@ -187,7 +187,7 @@ $goodsRequest = executeSearch($client, '/api_v1_master_goods/search', $goodsFiel
 
 // 商品マスタの取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
 if($goodsRequest['result'] === 'error'){
-    echo("商品マスタ取得のAPIでエラーが発生しました。しばらく時間を空けてからお試しください。\n");
+    echo("商品マスタ取得のAPIでエラーが発生しました。詳細は以下\n");
     echo("code: " . $goodsRequest['code'] . "\n");
     echo("message: " . $goodsRequest['message'] . "\n");
     exit;
@@ -197,7 +197,7 @@ if($goodsRequest['result'] === 'error'){
 $company = $client->apiExecute('/api_v1_login_company/info');
 // 利用者情報の取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
 if($company['result'] === 'error'){
-    echo("利用者情報取得のAPIでエラーが発生しました。しばらく時間を空けてからお試しください。\n");
+    echo("利用者情報取得のAPIでエラーが発生しました。詳細は以下\n");
     echo("code: " . $company['code'] . "\n");
     echo("message: " . $company['message'] . "\n");
     exit;

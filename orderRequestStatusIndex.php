@@ -6,6 +6,7 @@
  *
 */
 require_once(dirname(__FILE__).'/neApiClient.php');
+require_once(dirname(__FILE__).'/NeApiException.php');
 require_once(dirname(__FILE__).'/ReceiveOrder.php');
 
 // この値を「アプリを作る->API->テスト環境設定」の値に更新して下さい。
@@ -85,7 +86,13 @@ function executeSearch(neApiClient $client, $path, array $fields, array $opts = 
 {
     $params = $opts;
     $params['fields'] = implode(',', $fields);
-    return $client->apiExecute($path, $params);
+    $response = $client->apiExecute($path, $params);
+
+    if ($response['result'] !== 'success') {
+      throw new NeApiException($response['message'], $response['code']);
+    }
+
+    return $response;
 }
 
 function generateReceiveOrders($baseOrderRequest, $detailOrderRequest)
@@ -110,99 +117,80 @@ function generateReceiveOrders($baseOrderRequest, $detailOrderRequest)
  *
 */
 
-// 受注伝票の取得
-// 取得するフィールド一覧
-$baseFields = [
-    'receive_order_id',
-    'receive_order_shop_cut_form_id',
-    'receive_order_confirm_check_id',
-    'receive_order_order_status_id',
-    'receive_order_cancel_type_id',
-    'receive_order_deposit_type_id',
-    'receive_order_deleted_flag',
-    'receive_order_payment_method_id',
-    'receive_order_payment_method_name',
-    'receive_order_statement_delivery_instruct_printing_date',
-    'receive_order_send_date'
-    ];
-// オプション（件数制限）
-$baseOptions = ['limit' => 50];
-$baseOrderRequest = executeSearch($client, '/api_v1_receiveorder_base/search', $baseFields, $baseOptions);
+try {
+    // 受注伝票の取得
+    // 取得するフィールド一覧
+    $baseFields = [
+        'receive_order_id',
+        'receive_order_shop_cut_form_id',
+        'receive_order_confirm_check_id',
+        'receive_order_order_status_id',
+        'receive_order_cancel_type_id',
+        'receive_order_deposit_type_id',
+        'receive_order_deleted_flag',
+        'receive_order_payment_method_id',
+        'receive_order_payment_method_name',
+        'receive_order_statement_delivery_instruct_printing_date',
+        'receive_order_send_date'
+        ];
+    // オプション（件数制限）
+    $baseOptions = ['limit' => 50];
+    $baseOrderRequest = executeSearch($client, '/api_v1_receiveorder_base/search', $baseFields, $baseOptions);
 
+    // 受注伝票が1件もない場合には伝票明細は取れないのでこれ以降の処理をしない
+    if($baseOrderRequest['count'] === '0'){
+        echo('受注伝票が1件もありません。伝票を起票してお試しください。');
+        exit;
+    }
 
-// 受注伝票の取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
-if($baseOrderRequest['result'] === 'error'){
-    echo("受注伝票取得のAPIでエラーが発生しました。詳細は以下\n");
-    echo("code: " . $baseOrderRequest['code'] . "\n");
-    echo("message: " . $baseOrderRequest['message'] . "\n");
+    // 受注明細の取得
+    // 取得するフィールド一覧
+    $detailFields = [
+        'receive_order_id',
+        'receive_order_row_stock_allocation_quantity',
+        'receive_order_row_quantity',
+        'receive_order_row_no',
+        'receive_order_row_goods_id'
+        ];
+    // オプション（検索条件）
+    $receiveOrderIds = arrayColumn($baseOrderRequest['data'], 'receive_order_id');
+    $detailOptions = ['receive_order_id-in' => implode(',', $receiveOrderIds)];
+    $detailOrderRequest = executeSearch($client, '/api_v1_receiveorder_row/search', $detailFields, $detailOptions);
+
+    // 受注伝票明細が1件もない場合にはこれ以降の処理をしない
+    if($detailOrderRequest['count'] === '0'){
+        echo('受注伝票明細が1件もありません。明細のある伝票を起票してお試しください。');
+        exit;
+    }
+
+    // 受注伝票インスタンスの配列を生成
+    $receiveOrders = generateReceiveOrders($baseOrderRequest['data'], $detailOrderRequest['data']);
+
+    // 発売日待ち商品を取得する
+    $goodsFields = [
+        'goods_id',
+        'goods_release_date'
+        ];
+    $goodsOptions = ['goods_release_date-gt' => date('Y-m-d H:i:s')];
+
+    // 発売日待ち商品が1件もない場合は$goodsRequest['data']には空配列が入る
+    $goodsRequest = executeSearch($client, '/api_v1_master_goods/search', $goodsFields, $goodsOptions);
+
+    // 利用者情報（ホストを特定するのに使用）
+    $company = $client->apiExecute('/api_v1_login_company/info');
+    $companyHost = $company['data'][0]['company_host'];
+
+} catch(NeApiException $e) {
+    echo("API通信でエラーが発生しました。以下詳細<br>");
+    echo("code: " . $e->getCode() . "<br>");
+    echo("message: " . $e->getMessage() . "<br>");
+    exit;
+
+} catch(Exception $e) {
+    echo("予期せぬエラーが発生しました。以下のエラーメッセージをご確認ください。<br>");
+    echo("message: " . $e->getMessage() . "<br>");
     exit;
 }
-
-// 受注伝票が1件もない場合には伝票明細は取れないのでこれ以降の処理をしない
-if($baseOrderRequest['count'] === '0'){
-    echo('受注伝票が1件もありません。伝票を起票してお試しください。');
-    exit;
-}
-
-// 受注明細の取得
-// 取得するフィールド一覧
-$detailFields = [
-    'receive_order_id',
-    'receive_order_row_stock_allocation_quantity',
-    'receive_order_row_quantity',
-    'receive_order_row_no',
-    'receive_order_row_goods_id'
-    ];
-// オプション（検索条件）
-$receiveOrderIds = arrayColumn($baseOrderRequest['data'], 'receive_order_id');
-$detailOptions = ['receive_order_id-in' => implode(',', $receiveOrderIds)];
-$detailOrderRequest = executeSearch($client, '/api_v1_receiveorder_row/search', $detailFields, $detailOptions);
-
-// 受注伝票明細の取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
-if($detailOrderRequest['result'] === 'error'){
-    echo("受注伝票明細取得のAPIでエラーが発生しました。詳細は以下\n");
-    echo("code: " . $detailOrderRequest['code'] . "\n");
-    echo("message: " . $detailOrderRequest['message'] . "\n");
-    exit;
-}
-
-// 受注伝票明細が1件もない場合にはこれ以降の処理をしない
-if($detailOrderRequest['count'] === '0'){
-    echo('受注伝票明細が1件もありません。明細のある伝票を起票してお試しください。');
-    exit;
-}
-
-// 受注伝票インスタンスの配列を生成
-$receiveOrders = generateReceiveOrders($baseOrderRequest['data'], $detailOrderRequest['data']);
-
-// 発売日待ち商品を取得する
-$goodsFields = [
-    'goods_id',
-    'goods_release_date'
-    ];
-$goodsOptions = ['goods_release_date-gt' => date('Y-m-d H:i:s')];
-
-// 発売日待ち商品が1件もない場合は$goodsRequest['data']には空配列が入る
-$goodsRequest = executeSearch($client, '/api_v1_master_goods/search', $goodsFields, $goodsOptions);
-
-// 商品マスタの取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
-if($goodsRequest['result'] === 'error'){
-    echo("商品マスタ取得のAPIでエラーが発生しました。詳細は以下\n");
-    echo("code: " . $goodsRequest['code'] . "\n");
-    echo("message: " . $goodsRequest['message'] . "\n");
-    exit;
-}
-
-// 利用者情報（ホストを特定するのに使用）
-$company = $client->apiExecute('/api_v1_login_company/info');
-// 利用者情報の取得の処理に失敗した場合（API通信エラー等）これ以降の処理をしない
-if($company['result'] === 'error'){
-    echo("利用者情報取得のAPIでエラーが発生しました。詳細は以下\n");
-    echo("code: " . $company['code'] . "\n");
-    echo("message: " . $company['message'] . "\n");
-    exit;
-}
-$companyHost = $company['data'][0]['company_host'];
 
 ?>
 
